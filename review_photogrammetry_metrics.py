@@ -29,9 +29,8 @@ def extract_zip_files(zips_path):
     
     for item in tqdm(zip_files, desc="Extracting ZIP files", unit="file"):
         zip_path = os.path.join(zips_path, item)
-        extract_dir = os.path.join(zips_path, os.path.splitext(item)[0].strip())  # Stripping any trailing spaces
+        extract_dir = os.path.join(zips_path, os.path.splitext(item)[0].strip())
         
-        # Check if the folder already exists
         if os.path.exists(extract_dir):
             continue  # Skip extraction if folder exists
         
@@ -44,12 +43,11 @@ def extract_zip_files(zips_path):
         except Exception as e:
             print(f"An error occurred while extracting {zip_path}: {e}")
 
-def process_images_in_folders(zips_path):
-    for root, dirs, files in os.walk(zips_path):
+def process_images_in_folders(input_path):
+    for root, dirs, files in os.walk(input_path):
         for folder in dirs:
             folder_path = os.path.join(root, folder)
             if any(f.lower().endswith(('.heic', '.mp4', '.jpg', '.jpeg', '.mov')) for f in os.listdir(folder_path)):
-                # Process images and generate CSV for each folder
                 print(f"Processing images in {folder_path}")
                 process_images(folder_path)
 
@@ -60,9 +58,8 @@ def convert_heic_to_jpg(image_folder):
             heic_path = os.path.join(image_folder, image_file)
             jpg_path = os.path.join(image_folder, os.path.splitext(image_file)[0] + '.jpg')
             
-            # Check if the corresponding JPG file already exists
             if os.path.exists(jpg_path):
-                continue  # Skip conversion if JPG already exists
+                continue
             
             image = Image.open(heic_path)
             image.save(jpg_path, "JPEG", quality=100)
@@ -84,7 +81,7 @@ def evaluate_clip_concept(image_path, concept):
         outputs = clip_model(**inputs)
         logits_per_image = outputs.logits_per_image
     
-    return logits_per_image[0][0].item()  # Return the raw similarity score for the concept
+    return logits_per_image[0][0].item()
 
 def extract_features(image_path):
     image = Image.open(image_path)
@@ -115,24 +112,18 @@ def compute_metrics(image_path, all_features=None):
     image = Image.open(image_path).convert('L')
     image_np = np.array(image)
     
-    # Laplacian sharpness
     laplacian_sharpness = cv2.Laplacian(image_np, cv2.CV_64F).var()
-    
-    # Exposure
     exposure = compute_exposure(image_np)
-    
-    # CLIP metrics
     clip_blurryness = evaluate_clip_concept(image_path, "a blurry photo")
     clip_exposure = evaluate_clip_concept(image_path, "a poorly lit photo")
 
-    # CLIP outlier detection score (distance from the mean of all features)
     if all_features is not None:
         current_features = extract_features(image_path)
         avg_features = np.mean(all_features, axis=0)
         clip_outlier_detection = np.linalg.norm(current_features - avg_features)
     else:
-        clip_outlier_detection = 0  # Placeholder, should not happen
-
+        clip_outlier_detection = 0
+    
     return laplacian_sharpness, exposure, clip_blurryness, clip_exposure, clip_outlier_detection
 
 def normalize_by_sum(data):
@@ -157,7 +148,6 @@ def process_images(image_folder, convert_heic=True, delete_movies=True):
     new_images = [image_file for image_file in image_files if image_file not in existing_data]
 
     if new_images:
-        # Progress bar for feature extraction
         all_features = [extract_features(os.path.join(image_folder, image_file)) for image_file in tqdm(image_files, desc="Extracting features for outlier detection")]
 
         with open(output_csv, 'w', newline='') as csvfile:
@@ -172,22 +162,39 @@ def process_images(image_folder, convert_heic=True, delete_movies=True):
                     metrics = compute_metrics(image_path, all_features)
                     sharpness_data.append([image_file, *metrics])
 
-            # Normalize the data by dividing by the column sum (excluding the filename column)
             sharpness_array = np.array([row[1:] for row in sharpness_data])
             normalized_array = normalize_by_sum(sharpness_array)
 
-            # Write the normalized data back to the CSV
             for i, row in enumerate(sharpness_data):
                 sharpness_data[i] = [row[0]] + list(normalized_array[i])
                 csvwriter.writerow(sharpness_data[i])
     else:
         print("No new images detected. No re-computation necessary.")
 
-# Main function to extract and process
-def main(zips_path):
-    extract_zip_files(zips_path)
-    process_images_in_folders(zips_path)
+def main(zip_path=None, folder_path=None):
+    if zip_path and folder_path:
+        choice = input("Both ZIP and folder paths provided. Which one do you want to process? (zip/folder): ").strip().lower()
+        if choice == "zip":
+            extract_zip_files(zip_path)
+            print(f"Extracted ZIP files from {zip_path}")
+            process_images_in_folders(zip_path)
+        elif choice == "folder":
+            print(f"Processing images in folder: {folder_path}")
+            process_images_in_folders(folder_path)
+        else:
+            print("Invalid input. Please choose 'zip' or 'folder'.")
+    elif zip_path:
+        extract_zip_files(zip_path)
+        print(f"Extracted ZIP files from {zip_path}")
+        process_images_in_folders(zip_path)
+    elif folder_path:
+        print(f"Processing images in folder: {folder_path}")
+        process_images_in_folders(folder_path)
+    else:
+        print("Please provide at least one path (ZIP or folder).")
 
-# Example usage:
-zips_path = r"C:\Users\alons\Desktop\MesoAmerica_Photogrammetry\PLAYGROUND"
-main(zips_path)
+# Example usage
+if __name__ == "__main__":
+    zips_path = r"C:\Users\alons\Desktop\MesoAmerica_Photogrammetry\PLAYGROUND"
+    folder_path = r"C:\path\to\your\image\folder"  # Optional
+    main(zip_path=zips_path, folder_path=folder_path)
