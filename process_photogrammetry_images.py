@@ -184,10 +184,15 @@ def process_images(image_folder, convert_heic=True, delete_movies=True):
         print("No new images detected. No re-computation necessary.")
 
 # Main function to extract and process
-def main(zips_path):
-    extract_zip_files(zips_path)
-    process_images_in_folders(zips_path)
+def main(zips_path, folder_path=None):
+    if zips_path:
+        extract_zip_files(zips_path)
+    
+    # Process the image folder separately
+    if folder_path:
+        process_images_in_folders(folder_path)
 
 # Example usage:
 zips_path = r"C:\Users\alons\Desktop\MesoAmerica_Photogrammetry\PLAYGROUND"
-main(zips_path)
+folder_path = r"C:\Users\alons\Desktop\MyImageFolder"  # Add your custom image folder path here
+main(zips_path, folder_path)
